@@ -10,6 +10,7 @@ class Server {
   #server = null;
   #port = 3000;
   #endpointMap = {};
+  #middlewareMap = {};
 
   constructor() {
     this.#server = http.createServer((req, res) => {
@@ -23,12 +24,27 @@ class Server {
         if (interpretedData) {
           const { endpoint, body, method } = interpretedData;
           const { fn } = this.#endpointMap[endpoint];
+          const middlewareFns = this.#middlewareMap[endpoint];
+          const generalFns = this.#middlewareMap["*"];
           const { request, result } = this.#createRequestResult({
             body,
             method,
             req,
             res,
           });
+          if (middlewareFns) {
+            let fns = [];
+            if(generalFns){
+              fns = [...generalFns]; 
+            }
+            fns = [...fns, ...middlewareFns];
+            this.#executeMiddleware({
+              middlewareFns: fns,
+              req: request,
+              res: result,
+            });
+          }
+
           fn(request, result);
           return;
         }
@@ -39,6 +55,28 @@ class Server {
         res.writeHead(500);
         res.end("Server error");
       });
+    });
+  }
+
+  #executeMiddleware({ middlewareFns, req, res }) {
+    const middlewareFnExecution = ({ req, res, index }) => {
+      const fn = middlewareFns[index];
+      let nextCalled = false;
+      const next = () => {
+        nextCalled = true;
+        if (index + 1 < middlewareFns.length) {
+          middlewareFnExecution({ req, res, index: index + 1 });
+        }
+      };
+      fn(req, res, next);
+      if (!nextCalled) {
+        next();
+      }
+    };
+    middlewareFnExecution({
+      req,
+      res,
+      index: 0,
     });
   }
 
@@ -58,7 +96,7 @@ class Server {
       byteData.slice(endpointEnd, endpointEnd + endpointLength),
       "utf-8"
     ).toString();
-    console.log('endpoint', endpoint, endpointLength);
+    console.log("endpoint", endpoint, endpointLength);
     const methodBeg = endpointEnd + endpointLength;
     const methodEnd = methodBeg + 2;
     const methodLength = Buffer.from(
@@ -68,7 +106,7 @@ class Server {
       byteData.slice(methodEnd, methodEnd + methodLength),
       "utf-8"
     ).toString();
-    console.log('method', method, methodLength);
+    console.log("method", method, methodLength);
 
     if (endpoint in this.#endpointMap) {
       const { method: api_method, schema } = this.#endpointMap[endpoint];
@@ -81,7 +119,7 @@ class Server {
         const body = transformToJSON(schema)(
           byteData.slice(bodyEnd, bodyEnd + bodyLength)
         );
-        
+
         return {
           endpoint,
           body,
@@ -119,8 +157,21 @@ class Server {
     return { request, result };
   }
 
-  use(middleareFn, endpoints = []) {
-    if (endpoints.length === 0) {
+  use(endpoints, middlewareFn) {
+    if (Array.isArray(endpoints)) {
+      endpoints.forEach((endpoint) => {
+        if (endpoint in this.#middlewareMap) {
+          this.#endpointMap[endpoint].push(middlewareFn);
+        } else {
+          this.#middlewareMap[endpoint] = [middlewareFn];
+        }
+      });
+    } else {
+      if (endpoints in this.#middlewareMap) {
+        this.#endpointMap[endpoints].push(middlewareFn);
+      } else {
+        this.#middlewareMap[endpoints] = [middlewareFn];
+      }
     }
   }
 

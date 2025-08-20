@@ -11,6 +11,16 @@ const main = async() => {
     }
 
     const server = new Server();
+
+    server.use('*',(req, res, next)=>{
+        console.log("Auth middleware");
+        next();
+        console.log("After");
+    });
+    server.use('/test',(req, res, next)=>{
+        console.log("Other");
+    });
+
     server.post('/test', (req, res)=>{
         const { projectId, project } = req.body.params;
         console.log(req);
