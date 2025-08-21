@@ -22,8 +22,14 @@ const getBufferSize = (length) => {
     return 8;
 }
 
+const isJsonObject = (value) => 
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value)
+
 export const transformTypeToByte = (value) => {
-    switch(typeof value){
+    const type = isJsonObject(value) ? 'json' : typeof value;
+    switch(type){
         case 'boolean':
             const bytes = Buffer.alloc(1);
             bytes[0] = value ? 1 : 0;
@@ -49,11 +55,14 @@ export const transformTypeToByte = (value) => {
             }
         case 'string':
             return Buffer.from(value);
+        case 'json':
+            return transformToBytes(value);
     }
 }
 
 const transformByteToType = (type, bytes) => {
-    switch(type){
+    const typeType = isJsonObject(type) ? 'json' : type;
+    switch(typeType){
         case 'boolean':
             const buf = Buffer.from(bytes); 
             const num = buf.readUInt8(0);
@@ -75,6 +84,8 @@ const transformByteToType = (type, bytes) => {
             }
         case 'string':
             return Buffer.from(bytes,'utf-8').toString();
+        case 'json':
+            return transformToJSON(type)(bytes.slice(2)); // bytes after 2 bytes
     }
 }
 
@@ -86,12 +97,22 @@ export const transformToBytes = (obj) => {
         const keyData = Buffer.from(String(key));
         const keyLength = Buffer.alloc(2);
         keyLength.writeInt16LE(keyData.length, 0);
-        
-        const valueData = transformTypeToByte(value);
+        let valueData = null;
+        if(Array.isArray(value)){
+            const arrayByteData = []
+            for(const item of value){
+                const byteData = transformTypeToByte(item);
+                const byteDataLength = Buffer.alloc(2);
+                byteDataLength.writeInt16LE(byteData.length, 0);
+                arrayByteData.push(byteDataLength, byteData);
+            }
+            valueData = Buffer.concat(arrayByteData);
+        }else{
+            valueData = transformTypeToByte(value);
+        }
         const valueDataLength = Buffer.alloc(2);
         valueDataLength.writeInt16LE(valueData.length, 0);
         byteArray.push(keyLength, keyData, valueDataLength, valueData);
-        
         
         // const bufferTestData = Buffer.concat([keyLength, keyData, valueDataLength, valueData]);
         // const beg = 0;
@@ -107,20 +128,44 @@ export const transformToBytes = (obj) => {
     return Buffer.concat([length, bytes]);
 }
 
+export const transformArray = (type) => (bytes) => {
+    const array = [];
+    for(let i=0;i<bytes.length;){
+        const valueLength = Buffer.from(bytes.slice(i,i+2)).readInt16LE(0);
+        const byteData = bytes.slice(i+2, i+2+valueLength);
+        array.push(transformByteToType(type, byteData));
+        i=i+2+valueLength;
+    }
+    return array;
+}
+
+
 export const transformToJSON = (schema) => (bytes) => {
+    console.log(schema);
     const json = {};
     for(let i=0;i<bytes.length;){
-        console.log('keyd', i, i+2);
         const keyLength = Buffer.from(bytes.slice(i,i+2)).readInt16LE(0);
         const key = Buffer.from(bytes.slice(i+2, i+2+keyLength), 'utf-8').toString();
         // if(!(key in schema)){
         //     continue;
         // }
+        console.log('key', key);
         const type = schema[key];
         const begValueOffset = i+2+keyLength;
         const valueLength = Buffer.from(bytes.slice(begValueOffset,begValueOffset+2)).readInt16LE(0);
-        const data = transformByteToType(type, bytes.slice(begValueOffset+2, begValueOffset+2+valueLength));
-        json[key] = data;
+        const byteData = bytes.slice(begValueOffset+2, begValueOffset+2+valueLength);
+        if(typeof type === 'string'){
+            const data = transformByteToType(type, byteData);
+            json[key] = data;
+        }else if(Array.isArray(type)){
+            const arrayType = type[0];
+            json[key] = transformArray(arrayType)(byteData);
+        }else{
+            //assuming its a json here
+            const nextSchema = type;
+            const data = transformToJSON(nextSchema)(byteData.slice(2));
+            json[key] = data;
+        }
         i= begValueOffset+2+valueLength;
     }
     return json;

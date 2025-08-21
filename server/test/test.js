@@ -7,7 +7,11 @@ const main = async() => {
         isAdmin: 'boolean',
         age: 'number',
         projectId: 'number',
-        project: 'string'
+        project: 'string',
+        value: {
+            id: 'number',
+            name: 'string'
+        }
     }
 
     const server = new Server();
@@ -22,12 +26,27 @@ const main = async() => {
     });
 
     server.post('/test', (req, res)=>{
-        const { projectId, project } = req.body.params;
+        const { projectId, project, value } = req.body.params;
         console.log(req);
         res.send({
             name:'Bob',
             id:2,
-            comment:`Can you hear me?? this is the new id: ${projectId}_${project}`
+            comment:`Can you hear me?? this is the new id: ${projectId}_${project}`,
+            arr: [9,8],
+            arr2: [
+                {
+                    id: value.id,
+                    location: 'string1'
+                },
+                {
+                    id:34,
+                    location: 'string2'
+                },
+                {
+                    id:12,
+                    location: 'string3'
+                },
+            ]
         });
     }, schema);
     server.post('/test2', (req, res)=>{
