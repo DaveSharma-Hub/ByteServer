@@ -1,5 +1,5 @@
 import http from "http";
-import { transformToBytes, transformToJSON } from "./transformer.js";
+import { interpretBody, transformToBytes, transformToJSON } from "./transformer.js";
 
 const API_METHODS = {
   GET: "GET",
@@ -15,6 +15,36 @@ class Server {
   constructor() {
     this.#server = http.createServer((req, res) => {
       const rawDataChunks = [];
+      const url = req.url;
+
+      if(req.method === API_METHODS.GET){
+          const endpoint = url.split('?')[0];
+          console.log('end', endpoint, req.url);
+          const { fn } = this.#endpointMap[endpoint];
+          const middlewareFns = this.#middlewareMap[endpoint] || [];
+          const generalFns = this.#middlewareMap["*"];
+          const { request, result } = this.#createRequestResult({
+            query: this.#convertEndpointToJSON(url),
+            method: API_METHODS.GET,
+            req,
+            res,
+          });
+          console.log(middlewareFns, generalFns);
+          let fns = [];
+          if(generalFns){
+            fns = [...generalFns]; 
+          }
+          fns = [...fns, ...middlewareFns];
+          this.#executeMiddleware({
+            middlewareFns: fns,
+            req: request,
+            res: result,
+          });
+          console.log(request, result);
+          fn(request, result);
+          return; 
+      }
+
       req.on("data", (data) => {
         rawDataChunks.push(data);
       });
@@ -24,7 +54,7 @@ class Server {
         if (interpretedData) {
           const { endpoint, body, method } = interpretedData;
           const { fn } = this.#endpointMap[endpoint];
-          const middlewareFns = this.#middlewareMap[endpoint];
+          const middlewareFns = this.#middlewareMap[endpoint] || [];
           const generalFns = this.#middlewareMap["*"];
           const { request, result } = this.#createRequestResult({
             body,
@@ -32,22 +62,22 @@ class Server {
             req,
             res,
           });
-          if (middlewareFns) {
-            let fns = [];
-            if(generalFns){
-              fns = [...generalFns]; 
-            }
-            fns = [...fns, ...middlewareFns];
-            this.#executeMiddleware({
-              middlewareFns: fns,
-              req: request,
-              res: result,
-            });
+
+          let fns = [];
+          if(generalFns){
+            fns = [...generalFns]; 
           }
+          fns = [...fns, ...middlewareFns];
+          this.#executeMiddleware({
+            middlewareFns: fns,
+            req: request,
+            res: result,
+          });
 
           fn(request, result);
           return;
         }
+        
         res.writeHead(404);
         res.end("Invalid endpoint");
       });
@@ -78,6 +108,17 @@ class Server {
       res,
       index: 0,
     });
+  }
+
+  #convertEndpointToJSON(endpoint){
+    /// ?a=A&b=b&c=C
+    const [_, items] = endpoint.split('?');
+    const kv = items.split('&');
+    return kv.reduce((acc, curr)=>{
+      const [key, value] = curr.split('=');
+      acc[key] = value;
+      return acc;
+    },{});
   }
 
   #interpretDataToJSON(byteData) {
@@ -116,9 +157,7 @@ class Server {
         const bodyLength = Buffer.from(
           byteData.slice(bodyBeg, bodyEnd)
         ).readInt16LE(0);
-        const body = transformToJSON(schema)(
-          byteData.slice(bodyEnd, bodyEnd + bodyLength)
-        );
+        const body = interpretBody(schema)(byteData.slice(bodyEnd, bodyEnd + bodyLength));
 
         return {
           endpoint,
@@ -133,10 +172,13 @@ class Server {
     return transformToBytes(json);
   }
 
-  #createRequestResult({ body, method, req, res }) {
+  #createRequestResult({ body, query, method, req, res }) {
     const request = {
       body: {
         params: body,
+      },
+      query: {
+        params: query
       },
       method: method,
     };

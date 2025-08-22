@@ -25,6 +25,13 @@ const main = async() => {
         console.log("Other");
     });
 
+    server.get('/another', (req, res)=>{
+        console.log(req);
+        res.send({
+            id:123
+        });
+    });
+
     server.post('/test', (req, res)=>{
         const { projectId, project, value } = req.body.params;
         console.log(req);
@@ -50,13 +57,33 @@ const main = async() => {
         });
     }, schema);
     server.post('/test2', (req, res)=>{
-        console.log(req);
+        console.log('test2', req);
         res.send({
-            name:'Janice',
-            id:1,
-            comment:'Yes I can'
+            name:'Bob',
+            id:2,
+            comment:`Can you hear me?? this is the new id:`,
+            arr: [9,8],
+            arr2: [
+                {
+                    id: req.body.params[0].id,
+                    location: req.body.params[1].name
+                },
+                {
+                    id:34,
+                    location: 'string2'
+                },
+                {
+                    id:12,
+                    location: 'string3'
+                },
+            ]
         });
-    }, schema);
+    }, [{
+        id: 'number',
+        name: 'string',
+        isAdmin: 'boolean',
+        age: 'number',
+    }]);
     server.listen(3000, ()=>{console.log('Listening on port 3000')});
 }
 

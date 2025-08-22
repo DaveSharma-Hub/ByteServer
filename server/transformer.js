@@ -90,6 +90,20 @@ const transformByteToType = (type, bytes) => {
 }
 
 
+export const transformArrayToBytes = (arr) => {
+    const arrayByteData = [];
+    for(const item of arr){
+        const byteData = transformTypeToByte(item);
+        const byteDataLength = Buffer.alloc(2);
+        byteDataLength.writeInt16LE(byteData.length, 0);
+        arrayByteData.push(byteDataLength, byteData);
+    }
+    const valueData = Buffer.concat(arrayByteData);
+    const valueDataLength = Buffer.alloc(2);
+    valueDataLength.writeInt16LE(valueData.length, 0);
+    return Buffer.concat([valueDataLength, valueData]);
+}
+
 export const transformToBytes = (obj) => {
     const byteArray = [];
     const entries = Object.entries(obj);
@@ -132,10 +146,11 @@ export const transformArray = (type) => (bytes) => {
     const array = [];
     for(let i=0;i<bytes.length;){
         const valueLength = Buffer.from(bytes.slice(i,i+2)).readInt16LE(0);
-        const byteData = bytes.slice(i+2, i+2+valueLength);
+        const byteData = bytes.slice(i+2, i+2+valueLength); 
         array.push(transformByteToType(type, byteData));
         i=i+2+valueLength;
     }
+    console.log('array', array);
     return array;
 }
 
@@ -168,6 +183,20 @@ export const transformToJSON = (schema) => (bytes) => {
         }
         i= begValueOffset+2+valueLength;
     }
+    console.log('json', json);
     return json;
 }
 
+export const interpretBody = (schema) => (bytes) => {
+    if(isJsonObject(schema)){
+        return transformToJSON(schema)(bytes);
+    }
+    return transformArray(schema[0])(bytes);
+}
+
+export const exportBody = (json) => {
+    if(isJsonObject(json)){
+        return transformToBytes(json);
+    }
+    return transformArrayToBytes(json);
+}

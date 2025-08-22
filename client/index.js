@@ -1,6 +1,6 @@
 
 import axios from 'axios';
-import { transformToBytes, transformToJSON, transformTypeToByte } from './transformer.js';
+import { exportBody, transformToJSON, transformTypeToByte } from './transformer.js';
 
 class Client {
     #schema = null;
@@ -25,28 +25,41 @@ class Client {
         return Buffer.concat([endpointDataLength, endpointData, methodDataLength, methodData]);
     }
 
-    // get(schema) {
-    //     return async(endpoint, queryParams) => {
-    //         const body = transformToBytes(queryParams);
-    //         const headerInfo = this.#createHeaderInfo(endpoint, 'GET'); // method & endpoint
-    //         const rawData = Buffer.concat([headerInfo,body]); // TRANSORM TO BYTES
-    //         console.log(rawData);
-    //         const result = await axios.get(this.#url, rawData, {
-    //             headers: {
-    //                 'Content-Type': 'application/octet-stream', // or other MIME type as needed
-    //                 'Content-Length': rawData.length
-    //             },
-    //             responseType:'arraybuffer'
-    //         });
-    //         const output = result?.data;
-    //         return transformToJSON(schema)(output);
-    //         /// TRANSFORM FROM BYTES TO JSON
-    //     }
-    // }
+    get(schema) {
+        // return async(endpoint, queryParams) => {
+        //     const body = transformToBytes(queryParams);
+        //     const headerInfo = this.#createHeaderInfo(endpoint, 'GET'); // method & endpoint
+        //     const rawData = Buffer.concat([headerInfo,body]); // TRANSORM TO BYTES
+        //     console.log(rawData);
+        //     const result = await axios.get(this.#url, rawData, {
+        //         headers: {
+        //             'Content-Type': 'application/octet-stream', // or other MIME type as needed
+        //             'Content-Length': rawData.length
+        //         },
+        //         responseType:'arraybuffer'
+        //     });
+        //     const output = result?.data;
+        //     return transformToJSON(schema)(output);
+        //     /// TRANSFORM FROM BYTES TO JSON
+        // }
+        return async(endpoint) => {
+            
+            const result = await axios.get(`${this.#url}${endpoint}`, {
+                responseType:'arraybuffer'
+            });
+            const output = result?.data || [];
+            const length = Buffer.from(output.slice(0, 2)).readInt16LE(0);
+            if(length > 0){
+                console.log('length', length);
+                return transformToJSON(schema)(output.slice(2, 2 + length));
+            }
+            /// TRANSFORM FROM BYTES TO JSON
+        }
+    }
 
     post(schema){
         return async(endpoint, jsonData) => {
-            const body = transformToBytes(jsonData);
+            const body = exportBody(jsonData);
             const headerInfo = this.#createHeaderInfo(endpoint, 'POST'); // method & endpoint
             const rawData = Buffer.concat([headerInfo,body]); // TRANSORM TO BYTES
 
