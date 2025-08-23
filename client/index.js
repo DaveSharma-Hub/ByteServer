@@ -14,11 +14,11 @@ class Client {
     }
 
     #createHeaderInfo(endpoint, method){
-        const endpointData = transformTypeToByte(endpoint);
+        const endpointData = transformTypeToByte(endpoint, false);
         const endpointDataLength = Buffer.alloc(2);
         endpointDataLength.writeInt16LE(endpointData.length);
 
-        const methodData = transformTypeToByte(method);
+        const methodData = transformTypeToByte(method, false);
         const methodDataLength = Buffer.alloc(2);
         methodDataLength.writeInt16LE(methodData.length);
 

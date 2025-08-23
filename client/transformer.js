@@ -1,3 +1,5 @@
+import { compress, uncompress } from "./util.js";
+
 const numberByteLength = (num) => {
     let count = 0;
     while(num >0){
@@ -27,7 +29,7 @@ const isJsonObject = (value) =>
     value !== null &&
     !Array.isArray(value)
 
-export const transformTypeToByte = (value) => {
+export const transformTypeToByte = (value, shouldCompress = false) => {
     const type = isJsonObject(value) ? 'json' : typeof value;
     switch(type){
         case 'boolean':
@@ -54,6 +56,9 @@ export const transformTypeToByte = (value) => {
                 return numberBytes;
             }
         case 'string':
+            if(shouldCompress){
+                return compress(value);
+            }
             return Buffer.from(value);
         case 'json':
             return transformToBytes(value);
@@ -83,7 +88,8 @@ const transformByteToType = (type, bytes) => {
                 return numberBytes.readInt64LE(0);
             }
         case 'string':
-            return Buffer.from(bytes,'utf-8').toString();
+            return uncompress(bytes);
+            // return Buffer.from(bytes,'utf-8').toString();
         case 'json':
             return transformToJSON(type)(bytes.slice(2)); // bytes after 2 bytes
     }
@@ -93,7 +99,7 @@ const transformByteToType = (type, bytes) => {
 export const transformArrayToBytes = (arr) => {
     const arrayByteData = [];
     for(const item of arr){
-        const byteData = transformTypeToByte(item);
+        const byteData = transformTypeToByte(item, true);
         const byteDataLength = Buffer.alloc(2);
         byteDataLength.writeInt16LE(byteData.length, 0);
         arrayByteData.push(byteDataLength, byteData);
@@ -115,14 +121,14 @@ export const transformToBytes = (obj) => {
         if(Array.isArray(value)){
             const arrayByteData = []
             for(const item of value){
-                const byteData = transformTypeToByte(item);
+                const byteData = transformTypeToByte(item, true);
                 const byteDataLength = Buffer.alloc(2);
                 byteDataLength.writeInt16LE(byteData.length, 0);
                 arrayByteData.push(byteDataLength, byteData);
             }
             valueData = Buffer.concat(arrayByteData);
         }else{
-            valueData = transformTypeToByte(value);
+            valueData = transformTypeToByte(value, true);
         }
         const valueDataLength = Buffer.alloc(2);
         valueDataLength.writeInt16LE(valueData.length, 0);

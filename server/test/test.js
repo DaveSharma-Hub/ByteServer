@@ -87,4 +87,23 @@ const main = async() => {
     server.listen(3000, ()=>{console.log('Listening on port 3000')});
 }
 
+const main2 = async() => {
+    const str = 'hello world 123 this is my name cool testjknkljnnnnnnnnnnnnnnnnnnnnnnnnhjjjjjjjjjjjj';
+    const c = await compress(str);
+    console.log(c.length);
+    console.log(str.length)
+    console.log((await uncompress(c)).toString());
+}
+
+import { compressSync, decompressSync, strToU8, strFromU8 } from 'fflate';
+const main3 = () => {
+
+    const str = 'hello world 123';
+    // console.log(strFromU8(decompressSync(compressSync(strToU8(str)))));
+    console.log(compressSync(strToU8(str)).length);
+    console.log(str.length);
+}
+
+// main3();
+// main2();
 main();
